@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor PDI de Grabado Láser sobre Cuero Negro (Binario 4 Niveles)</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <h1>Estudio PDI · Grabado Láser en Cuero Negro</h1>
+      <span class="badge">100% Local · Sin IA · Salida Binaria RGBA (0,0,0,255 / 0,0,0,0)</span>
+    </div>
+    <div class="header-status">
+      <div id="ReadoutDimensions" class="dim-readout">Sin imagen cargada</div>
+      <div id="ProcessingIndicator" class="proc-indicator hidden">
+        <span class="spinner"></span>
+        <span id="ProcText">Procesando...</span>
+        <button id="BtnCancelProc" class="btn btn-danger btn-xs">Cancelar</button>
+      </div>
+      <div class="header-actions">
+        <button id="BtnSaveProject" class="btn btn-secondary" title="Guardar proyecto autocontenido (.json)">Guardar Proyecto</button>
+        <label class="btn btn-secondary" title="Cargar archivo de proyecto (.json)">
+          Cargar Proyecto
+          <input type="file" id="InputLoadProject" accept=".json" hidden>
+        </label>
+        <button id="BtnRunTests" class="btn btn-accent" title="Ejecutar las 10 pruebas de aceptación con imágenes sintéticas">Ejecutar Pruebas (10)</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <!-- PANEL A: CARGA, PREPARACIÓN Y HERRAMIENTAS MANUALES -->
+    <aside class="panel panel-left">
+      <div class="panel-section">
+        <h2>1. Carga y Geometría</h2>
+        <div id="DropZone" class="drop-zone">
+          <p>Arrastra aquí una imagen (PNG, JPG, WebP) o</p>
+          <label class="btn btn-primary">
+            Seleccionar Archivo
+            <input type="file" id="InputImageFile" accept="image/png,image/jpeg,image/webp" hidden>
+          </label>
+          <button id="BtnLoadSyntheticDemo" class="btn btn-secondary btn-sm" style="margin-top:6px;">Cargar Retrato/Escudo Sintético de Prueba</button>
+        </div>
+
+        <div class="control-grid-2" style="margin-top:8px;">
+          <button id="BtnRotateLeft" class="btn btn-secondary btn-sm">↺ Girar -90°</button>
+          <button id="BtnRotateRight" class="btn btn-secondary btn-sm">↻ Girar +90°</button>
+          <button id="BtnFlipH" class="btn btn-secondary btn-sm">⇄ Voltear Horiz.</button>
+          <button id="BtnResetCrop" class="btn btn-secondary btn-sm">Restablecer Recorte</button>
+        </div>
+
+        <div class="sub-box">
+          <div class="row-between">
+            <strong>Recorte Activo</strong>
+            <button id="BtnToggleCropMode" class="btn btn-secondary btn-xs">Dibujar Recorte en Lienzo</button>
+          </div>
+          <div class="control-grid-2" style="margin-top:6px;">
+            <label>X (%) <input type="number" id="CropX" min="0" max="95" value="0" step="1"></label>
+            <label>Y (%) <input type="number" id="CropY" min="0" max="95" value="0" step="1"></label>
+            <label>Ancho (%) <input type="number" id="CropW" min="5" max="100" value="100" step="1"></label>
+            <label>Alto (%) <input type="number" id="CropH" min="5" max="100" value="100" step="1"></label>
+          </div>
+          <div class="row-between" style="margin-top:6px;">
+            <button id="BtnApplyCrop" class="btn btn-primary btn-xs">Aplicar Recorte</button>
+            <span class="hint">No destructivo sobre original</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>2. Tamaño Físico y Resolución</h2>
+        <div class="control-grid-2">
+          <label>Ancho (mm)
+            <input type="number" id="PhysWidthMM" min="5" max="400" step="0.5" value="80">
+          </label>
+          <label>Alto (mm)
+            <input type="number" id="PhysHeightMM" min="5" max="400" step="0.5" value="80">
+          </label>
+        </div>
+        <label class="checkbox-label" style="margin-top:4px;">
+          <input type="checkbox" id="LockAspect" checked> Mantener relación de aspecto
+        </label>
+        <div class="control-row" style="margin-top:6px;">
+          <label>Resolución de Salida (PPP / DPI)</label>
+          <select id="OutputDPI">
+            <option value="300">300 PPP (Rápido / Borrador)</option>
+            <option value="600" selected>600 PPP (Recomendado Cuero)</option>
+            <option value="1200">1200 PPP (Alta Densidad)</option>
+          </select>
+        </div>
+        <div id="EffectiveMeasureBox" class="info-box">
+          Medida efectiva: <strong>80.01 × 80.01 mm</strong> (1890 × 1890 px)
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>3. Herramientas Interactivas</h2>
+        <p class="hint">Selecciona dónde actuar y la herramienta activa para operar sobre los lienzos centrales.</p>
+
+        <div class="tool-group-title">A. Máscara del Sujeto (Eliminación de Fondo)</div>
+        <div class="tool-grid">
+          <button class="tool-btn active" data-tool="pan">✋ Mover / Navegar</button>
+          <button class="tool-btn" data-tool="subj_erase">🧹 Borrar Fondo (Pincel)</button>
+          <button class="tool-btn" data-tool="subj_restore">🖌️ Recuperar Sujeto</button>
+          <button class="tool-btn" data-tool="wand_contig">🪄 Varita Contigua (Flood)</button>
+          <button class="tool-btn" data-tool="wand_global">🎨 Color Similar Global</button>
+          <button class="tool-btn" data-tool="rect_exclude">▭ Rectángulo Excluir</button>
+          <button class="tool-btn" data-tool="poly_exclude">⬠ Polígono Excluir</button>
+        </div>
+
+        <div class="sub-box">
+          <label>Tolerancia de Color (Varita / Global): <span id="ValWandTol">28</span></label>
+          <input type="range" id="WandTolerance" min="1" max="150" value="28">
+          <div class="control-grid-2" style="margin-top:6px;">
+            <button id="BtnInvertSubjectMask" class="btn btn-secondary btn-xs">Invertir Sujeto/Fondo</button>
+            <button id="BtnCleanSubjectIslands" class="btn btn-secondary btn-xs">Limpiar Islas Sujeto</button>
+            <button id="BtnResetSubjectMask" class="btn btn-secondary btn-xs">Restaurar Todo Sujeto</button>
+          </div>
+        </div>
+
+        <div class="tool-group-title" style="margin-top:10px;">B. Corrección Manual del Resultado</div>
+        <div class="tool-grid">
+          <button class="tool-btn" data-tool="res_black">⚫ Pincel Negro Sólido</button>
+          <button class="tool-btn" data-tool="res_erase">⚪ Borrador Transparente</button>
+          <button class="tool-btn" data-tool="res_level">🎚️ Pintar Nivel (0-3)</button>
+          <button class="tool-btn" data-tool="res_line">📏 Línea Negra Sólida</button>
+          <button class="tool-btn" data-tool="res_poly">⬟ Polígono Relleno</button>
+          <button class="tool-btn" data-tool="res_protect">🛡️ Proteger Detalles</button>
+        </div>
+
+        <div class="sub-box">
+          <div class="control-row">
+            <label>Tamaño de Pincel / Línea: <strong><span id="ValBrushMM">1.2</span> mm</strong> (<span id="ValBrushPX">28</span> px)</label>
+            <input type="range" id="BrushSizeMM" min="0.2" max="15.0" step="0.1" value="1.2">
+          </div>
+          <div class="control-row" style="margin-top:4px;">
+            <label>Nivel para "Pintar Nivel" / "Polígono":</label>
+            <select id="ManualLevelSelect">
+              <option value="0">Nivel 0: Transparencia Total</option>
+              <option value="1">Nivel 1: Trama Abierta</option>
+              <option value="2">Nivel 2: Trama Media</option>
+              <option value="3" selected>Nivel 3: Negro Sólido</option>
+            </select>
+          </div>
+          <div class="control-grid-3" style="margin-top:6px;">
+            <button id="BtnUndo" class="btn btn-secondary btn-xs" disabled>↶ Deshacer</button>
+            <button id="BtnRedo" class="btn btn-secondary btn-xs" disabled>↷ Rehacer</button>
+            <button id="BtnClearManual" class="btn btn-danger btn-xs">Borrar Correcciones</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- PANEL CENTRAL (B, C, D): VISORES INTERACTIVOS Y COMPARACIÓN -->
+    <section class="center-stage">
+      <div class="viewport-toolbar">
+        <div class="view-tabs">
+          <button class="tab-btn active" data-view="split">Vista Triple (Original / Máscara / Cuero)</button>
+          <button class="tab-btn" data-view="original">B. Original y Sujeto</button>
+          <button class="tab-btn" data-view="mask">C. Resultado Binario (PNG)</button>
+          <button class="tab-btn" data-view="leather">D. Simulación Cuero Negro</button>
+          <button class="tab-btn" data-view="compare">Comparador Antes/Después</button>
+        </div>
+        <div class="zoom-controls">
+          <button id="BtnZoomOut" class="btn btn-secondary btn-xs">−</button>
+          <span id="ZoomReadout" class="zoom-label">100%</span>
+          <button id="BtnZoomIn" class="btn btn-secondary btn-xs">+</button>
+          <button id="BtnZoomFit" class="btn btn-secondary btn-xs">Ajustar</button>
+          <button id="BtnZoom100" class="btn btn-secondary btn-xs">100%</button>
+        </div>
+      </div>
+
+      <div class="viewport-options-bar">
+        <label class="checkbox-label">
+          <input type="checkbox" id="ShowSubjectOverlay" checked> Mostrar exclusión de fondo en Original (Rojo)
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="ShowProtectOverlay" checked> Mostrar zonas protegidas (Verde)
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="PreviewRemovedDetails"> Resaltar detalles eliminados por limpieza (Magenta)
+        </label>
+        <div class="leather-tone-picker">
+          <label>Tono Simulado en Cuero:
+            <input type="color" id="LeatherMarkColor" value="#d8be98" title="Solo orientativo para la vista previa">
+          </label>
+        </div>
+      </div>
+
+      <!-- Contenedor del Lienzo Interactivo -->
+      <div id="ViewportContainer" class="viewport-container">
+        <div id="CanvasStage" class="canvas-stage">
+          <!-- Panel B: Original + Máscara Sujeto -->
+          <div class="stage-card" id="CardOriginal">
+            <div class="card-header">B. Original y Máscara de Sujeto (Clic/Arrastrar aquí para editar)</div>
+            <div class="canvas-wrap checkerboard">
+              <canvas id="CanvasOriginal"></canvas>
+            </div>
+          </div>
+
+          <!-- Panel C: Resultado Procesado Binario -->
+          <div class="stage-card" id="CardMask">
+            <div class="card-header">C. Máscara de Grabado Binaria (Negro = Grabar, Tablero = Transparente)</div>
+            <div class="canvas-wrap checkerboard">
+              <canvas id="CanvasMask"></canvas>
+            </div>
+          </div>
+
+          <!-- Panel D: Simulación Cuero Negro -->
+          <div class="stage-card" id="CardLeather">
+            <div class="card-header">D. Simulación Orientativa sobre Cuero Negro Liso</div>
+            <div class="canvas-wrap leather-bg">
+              <canvas id="CanvasLeather"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modo Comparador Deslizante Antes/Después -->
+        <div id="CompareOverlayControl" class="compare-slider-bar hidden">
+          <label>Cortina Antes / Después: <input type="range" id="CompareSplitRange" min="0" max="100" value="50"></label>
+        </div>
+      </div>
+
+      <footer class="stage-footer">
+        <span id="CursorCoords">X: 0.0 mm, Y: 0.0 mm</span>
+        <span class="disclaimer-inline">Nota: La simulación en cuero es meramente orientativa y no predice color, temperatura ni profundidad física real en la Creality Falcon A1 Pro.</span>
+      </footer>
+    </section>
+
+    <!-- PANEL E: CONTROLES DE PROCESAMIENTO, TRAMAS Y EXPORTACIÓN -->
+    <aside class="panel panel-right">
+      <div class="panel-section">
+        <h2>4. Ajustes Tonales y Suavizado</h2>
+        <div class="control-row">
+          <label>Brillo: <span id="ValBrightness">0</span></label>
+          <input type="range" id="SliderBrightness" min="-100" max="100" value="0">
+        </div>
+        <div class="control-row">
+          <label>Contraste: <span id="ValContrast">15</span></label>
+          <input type="range" id="SliderContrast" min="-100" max="100" value="15">
+        </div>
+        <div class="control-row">
+          <label>Gamma: <span id="ValGamma">1.00</span></label>
+          <input type="range" id="SliderGamma" min="0.20" max="3.00" step="0.05" value="1.00">
+        </div>
+        <div class="control-row">
+          <label>Suavizado Previo (Radio px): <span id="ValSmooth">1</span></label>
+          <input type="range" id="SliderSmooth" min="0" max="8" step="1" value="1">
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>5. Cuantización (4 Niveles) y Polaridad</h2>
+        <div class="row-between">
+          <span>3 Umbrales Ordenados (0–255)</span>
+          <button id="BtnAutoOtsu" class="btn btn-secondary btn-xs" title="Calcula 3 umbrales óptimos mediante Otsu multinivel sobre el sujeto">Auto Umbrales (Otsu)</button>
+        </div>
+        <div class="control-row" style="margin-top:6px;">
+          <label>Umbral 1 (Oscuros / Media): <span id="ValT1">64</span></label>
+          <input type="range" id="Threshold1" min="1" max="252" value="64">
+        </div>
+        <div class="control-row">
+          <label>Umbral 2 (Media / Abierta): <span id="ValT2">128</span></label>
+          <input type="range" id="Threshold2" min="2" max="253" value="128">
+        </div>
+        <div class="control-row">
+          <label>Umbral 3 (Abierta / Claros): <span id="ValT3">192</span></label>
+          <input type="range" id="Threshold3" min="3" max="254" value="192">
+        </div>
+
+        <div class="sub-box">
+          <div class="row-between">
+            <strong>Asignación Tonal (Sujeto)</strong>
+            <button id="BtnInvertPolarity" class="btn btn-primary btn-xs">⇄ Invertir Asignación Tonal</button>
+          </div>
+          <p class="hint">En cuero negro, el láser aclara donde graba (Negro en máscara = zona grabada). Ajusta qué nivel corresponde a cada banda de luz:</p>
+          <div class="band-mapping-grid">
+            <label>Banda 0 [0..T1] (Sombras):</label>
+            <select id="MapBand0">
+              <option value="0" selected>Nivel 0: Transparente</option>
+              <option value="1">Nivel 1: Trama Abierta</option>
+              <option value="2">Nivel 2: Trama Media</option>
+              <option value="3">Nivel 3: Negro Sólido</option>
+            </select>
+
+            <label>Banda 1 [T1..T2] (Medios Osc.):</label>
+            <select id="MapBand1">
+              <option value="0">Nivel 0: Transparente</option>
+              <option value="1" selected>Nivel 1: Trama Abierta</option>
+              <option value="2">Nivel 2: Trama Media</option>
+              <option value="3">Nivel 3: Negro Sólido</option>
+            </select>
+
+            <label>Banda 2 [T2..T3] (Medios Cla.):</label>
+            <select id="MapBand2">
+              <option value="0">Nivel 0: Transparente</option>
+              <option value="1">Nivel 1: Trama Abierta</option>
+              <option value="2" selected>Nivel 2: Trama Media</option>
+              <option value="3">Nivel 3: Negro Sólido</option>
+            </select>
+
+            <label>Banda 3 [T3..255] (Luces):</label>
+            <select id="MapBand3">
+              <option value="0">Nivel 0: Transparente</option>
+              <option value="1">Nivel 1: Trama Abierta</option>
+              <option value="2">Nivel 2: Trama Media</option>
+              <option value="3" selected>Nivel 3: Negro Sólido</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>6. Limpieza y Contornos (Pre-Trama)</h2>
+        <label class="checkbox-label">
+          <input type="checkbox" id="EnableCleanDetails" checked> Eliminar detalles aislados no esenciales
+        </label>
+        <p class="hint">Se aplica a las regiones tonales antes de generar la trama para no borrar líneas ni puntos de 0.3 mm. Respeta zonas protegidas.</p>
+        <div class="control-grid-2">
+          <label>Modo de Criterio
+            <select id="CleanCriterionMode">
+              <option value="dimension" selected>Por Dimensión Caja (mm)</option>
+              <option value="area">Por Área Componente (mm²)</option>
+            </select>
+          </label>
+          <label>Umbral (<span id="CleanUnitLabel">mm</span>)
+            <input type="number" id="CleanThresholdVal" min="0.1" max="10.0" step="0.1" value="1.0">
+          </label>
+        </div>
+
+        <div class="control-row" style="margin-top:6px;">
+          <label>Operación Morfológica en Regiones Tonales</label>
+          <select id="MorphOpSelect">
+            <option value="none" selected>Ninguna</option>
+            <option value="open">Apertura (Elimina picos finos)</option>
+            <option value="close">Cierre (Rellena poros internos)</option>
+          </select>
+        </div>
+
+        <div class="sub-box" style="margin-top:8px;">
+          <label class="checkbox-label">
+            <input type="checkbox" id="EnableEdges" checked> Superponer Contornos (Bordes Sobel)
+          </label>
+          <div class="control-grid-2" style="margin-top:4px;">
+            <label>Sensibilidad Bordes: <span id="ValEdgeThresh">95</span>
+              <input type="range" id="EdgeThreshold" min="15" max="240" value="95">
+            </label>
+            <label>Grosor Contorno (mm)
+              <input type="number" id="EdgeWidthMM" min="0.15" max="2.5" step="0.05" value="0.35">
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>7. Generador de Tramas Físicas</h2>
+        <div class="control-row">
+          <label>Tipo de Trama Geométrica</label>
+          <select id="HalftoneType">
+            <option value="lines" selected>Trama de Líneas Paralelas</option>
+            <option value="dots">Trama de Puntos Regulares</option>
+          </select>
+        </div>
+
+        <!-- Configuración de Líneas -->
+        <div id="HalftoneLinesBox" class="sub-box">
+          <div class="control-grid-2">
+            <label>Ángulo (°)
+              <input type="number" id="LineAngleDeg" min="-89" max="89" step="1" value="45">
+            </label>
+            <label>Grosor Línea (mm)
+              <input type="number" id="LineThickMM" min="0.1" max="2.0" step="0.05" value="0.30">
+            </label>
+            <label>Espacio Libre N1 Abierta (mm)
+              <input type="number" id="LineGapOpenMM" min="0.1" max="4.0" step="0.05" value="0.60">
+            </label>
+            <label>Espacio Libre N2 Media (mm)
+              <input type="number" id="LineGapMidMM" min="0.1" max="4.0" step="0.05" value="0.40">
+            </label>
+          </div>
+          <div id="LineMathReadout" class="info-box" style="margin-top:6px;">
+            Paso N1: 0.90 mm | Paso N2: 0.70 mm
+          </div>
+        </div>
+
+        <!-- Configuración de Puntos -->
+        <div id="HalftoneDotsBox" class="sub-box hidden">
+          <div class="control-grid-2">
+            <label>Diámetro Punto (mm)
+              <input type="number" id="DotDiamMM" min="0.1" max="2.0" step="0.05" value="0.30">
+            </label>
+            <label>Sep. Libre N1 Abierta (mm)
+              <input type="number" id="DotGapOpenMM" min="0.2" max="4.0" step="0.05" value="0.60">
+            </label>
+            <label>Sep. Libre N2 Media (mm)
+              <input type="number" id="DotGapMidMM" min="0.2" max="4.0" step="0.05" value="0.40">
+            </label>
+          </div>
+          <div id="DotMathReadout" class="info-box" style="margin-top:6px;">
+            Paso centros N1: 0.90 mm | Paso centros N2: 0.70 mm (Mín. 0.70 mm)
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>8. Validación y Exportación PNG</h2>
+        <button id="BtnExportPNG" class="btn btn-primary btn-block">Validar y Descargar PNG Transparente</button>
+
+        <div id="ExportSummaryBox" class="export-summary">
+          <div><strong>Resumen de Salida Actual:</strong></div>
+          <ul id="ExportStatsList">
+            <li>Dimensiones: —</li>
+            <li>Resolución: —</li>
+            <li>Superficie marcada (Negro): —</li>
+            <li>Fragmentos de borde &lt; 0.15 mm: —</li>
+            <li>Estado binario: Pendiente de validar</li>
+          </ul>
+          <div class="warning-banner">
+            ⚠️ <strong>Advertencia:</strong> Comprueba el tamaño físico y la interpretación de la transparencia al importar el archivo en tu software de grabado (ej. LightBurn / Creality).
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- MODAL DE PRUEBAS DE ACEPTACIÓN -->
+  <div id="ModalTests" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Suite de 10 Pruebas Reproducibles de Aceptación</h2>
+        <button id="BtnCloseTests" class="btn btn-secondary btn-xs">✕ Cerrar</button>
+      </div>
+      <div id="TestResultsContainer" class="modal-body">
+        <p>Ejecutando pruebas...</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
